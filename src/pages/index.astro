@@ -4,6 +4,12 @@ import JobCard from '../components/JobCard.astro';
 import SearchFilters from '../components/SearchFilters.astro';
 import Pagination from '../components/Pagination.astro';
 import { supabase } from '../lib/supabase';
+import { getEntry } from "astro:content";
+import Alert from "../components/Alert.astro";
+import Guide from "../components/Guide.astro";
+import Layout from "../components/Layout.astro";
+import TableRow from "../components/TableRow.astro";
+import { supabase } from "../utils/database";
 
 // Get search params
 const searchParams = {
