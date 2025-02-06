@@ -1,71 +1,93 @@
 ---
-import { getEntry } from "astro:content";
-import Alert from "../components/Alert.astro";
-import Guide from "../components/Guide.astro";
-import Layout from "../components/Layout.astro";
-import TableRow from "../components/TableRow.astro";
-import { supabase } from "../utils/database";
+import Layout from '../layouts/Layout.astro';
+import JobCard from '../components/JobCard.astro';
+import SearchFilters from '../components/SearchFilters.astro';
+import Pagination from '../components/Pagination.astro';
+import { supabase } from '../lib/supabase';
 
-export const prerender = false;
+// Get search params
+const searchParams = {
+  search: Astro.url.searchParams.get('search') || '',
+  category: Astro.url.searchParams.get('category'),
+  type: Astro.url.searchParams.get('type'),
+  minSalary: Astro.url.searchParams.get('minSalary'),
+};
 
-let frameworks;
-let frameworksError;
+const currentPage = parseInt(Astro.url.searchParams.get('page') || '1');
+const perPage = 9;
 
-// Fetch frameworks data from Supabase if connection is set up
-if (supabase) {
-  const { data, error } = await supabase
-    .from("frameworks")
-    .select("*")
-    .order("likes", { ascending: false });
-  frameworks = data;
-  frameworksError = error;
+// Build query
+let query = supabase
+  .from('jobs')
+  .select(`
+    *,
+    company:companies(*),
+    category:categories(*)
+  `, { count: 'exact' });
+
+// Apply filters
+if (searchParams.search) {
+  query = query.or(`title_ar.ilike.%${searchParams.search}%,description_ar.ilike.%${searchParams.search}%`);
 }
 
-// Get guides
-const connectGuide = await getEntry("guides", "guide-connect-supabase");
-const fetchDataGuide = await getEntry("guides", "guide-fetch-data");
+if (searchParams.category) {
+  query = query.eq('category_id', searchParams.category);
+}
+
+if (searchParams.type) {
+  query = query.eq('job_type', searchParams.type);
+}
+
+if (searchParams.minSalary) {
+  query = query.gte('salary_min', parseInt(searchParams.minSalary));
+}
+
+// Add pagination
+const from = (currentPage - 1) * perPage;
+const to = from + perPage - 1;
+
+const { data: jobs, count } = await query
+  .order('created_at', { ascending: false })
+  .range(from, to);
+
+const totalPages = Math.ceil((count || 0) / perPage);
 ---
 
-<Layout title="Web Frameworks">
-  {
-    supabase ? (
-      frameworks ? (
-        <>
-          <h1 class="mb-8 text-4xl font-bold">
-            Vote for Your Favorite Web Framework
-          </h1>
-          <table class="w-full text-left">
-            <thead>
-              <tr class="font-mono text-base border-t border-b">
-                <th>Name</th>
-                <th>Logo</th>
-                <th>Likes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {frameworks?.map((framework) => (
-                <TableRow framework={framework} />
-              ))}
-            </tbody>
-          </table>
-        </>
-      ) : (
-        <>
-          {frameworksError && (
-            <Alert
-              title={frameworksError.code}
-              text={frameworksError.message}
-              variant="error"
-            />
-          )}
-          {fetchDataGuide && <Guide guide={fetchDataGuide} />}
-        </>
-      )
-    ) : (
+<Layout title="جوبايتي - منصة التوظيف الأولى">
+  <main class="container mx-auto px-4 py-8 text-right">
+    <section class="bg-gradient-to-l from-blue-600 to-purple-600 text-white rounded-2xl p-12 mb-12">
+      <h1 class="text-4xl font-bold mb-4">اعثر على مسارك المهني المثالي</h1>
+      <p class="text-xl mb-8">اكتشف الفرص في مجال التوظيف التقليدي والعمل الحر. خطوتك المهنية القادمة تبدأ من هنا.</p>
+      
+      <div class="flex gap-4 justify-center">
+        <a href="#" class="bg-white text-blue-600 px-6 py-3 rounded-lg font-semibold hover:bg-blue-50 transition-colors">
+          تصفح الوظائف
+        </a>
+        <a href="#" class="bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-800 transition-colors">
+          ابحث عن العمل الحر
+        </a>
+      </div>
+    </section>
+
+    <SearchFilters searchParams={searchParams} />
+
+    {jobs && jobs.length > 0 ? (
       <>
-        <Alert title="Finish setting up your new site" text="Before your website is ready, you must complete the steps from the guide below to create, populate, and connect your Supabase database."/>
-        {connectGuide && <Guide guide={connectGuide} />}
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {jobs.map((job) => <JobCard job={job} />)}
+        </div>
+        
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          baseUrl={Astro.url.pathname}
+        />
       </>
-    )
-  }
+    ) : (
+      <div class="text-center py-12">
+        <h2 class="text-2xl font-bold text-gray-900 mb-2">لم يتم العثور على وظائف</h2>
+        <p class="text-gray-600">جرب تعديل معايير البحث للحصول على نتائج مختلفة</p>
+      </div>
+    )}
+  </main>
 </Layout>
